@@ -173,6 +173,15 @@ cycling_indicators:
   # in every cost, approximating walking a bicycle (~5 km/h) against riding (~15).
   # danger_weight: 1.25
   # dismount_weight: 3.0
+  # One-way streets.  Riding is routed with the flow only (OpenStreetMap oneway, unless
+  # contraflow cycling is tagged, e.g. oneway:bicycle=no).  contraflow sets what happens
+  # against it: dismount (default; walk the bike at dismount_weight, and not usable in
+  # the low_stress_ride measure), prohibit (not usable at all) or permit (ignore one-way
+  # restrictions, as before they were accounted for).  trip_direction is the leg of the
+  # trip measured: outbound (default; sample point to destination), return, or both
+  # (the longer of the two; doubles the routing).
+  # contraflow: dismount
+  # trip_direction: outbound
   # Cycling catchment thresholds (metres)
   distances: [2000, 5000]
   # Destination specs to analyse (the default set is shown).  Each maps a layer plus an

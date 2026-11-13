@@ -3714,6 +3714,325 @@ series:
             routed['sp_nearest_node_b'],
         )
 
+    def test_0_61_directed_graph_one_way(self):
+        """A directed graph honours one-way streets; the default stays undirected.
+
+        A 100 m one-way street 1 -> 2 on a block whose other three sides are
+        two-way: with the flow it is 100 m, against it the way round (300 m).  A
+        negative or non-finite cost is no arc; parallel arcs reduce to the cheapest
+        per *ordered* pair; a node left with no arcs is still a node.  The pgRouting
+        batch SQL carries the same flag.
+        """
+        from unittest.mock import MagicMock
+
+        import numpy as np
+        import setup_sp
+        from scipy.sparse.csgraph import dijkstra
+
+        u = [1, 2, 3, 4, 1, 5]
+        v = [2, 3, 4, 1, 2, 6]
+        w = [100.0, 100.0, 100.0, 100.0, 140.0, 10.0]
+        w_reverse = [-1.0, 100.0, 100.0, 100.0, 400.0, np.nan]
+
+        graph, node_ids = setup_sp.graph_from_edge_arrays(
+            u,
+            v,
+            w,
+            w_reverse,
+            directed=True,
+        )
+        self.assertEqual(node_ids.tolist(), [1, 2, 3, 4, 5, 6])
+        dist = dijkstra(graph, directed=True)
+        self.assertEqual(dist[0, 1], 100.0)  # with the flow
+        # against the flow: round the block, which beats the 400 m parallel arc
+        self.assertEqual(dist[1, 0], 300.0)
+        self.assertEqual(graph[0, 1], 100.0)  # cheapest of the parallel pair
+        self.assertEqual(graph[1, 0], 400.0)  # the -1 arc was dropped, not the 400
+        self.assertEqual(dist[4, 5], 10.0)
+        self.assertTrue(np.isinf(dist[5, 4]))  # NaN reverse cost: no arc
+
+        # walking the bike against the flow at 250 m now beats the block
+        w_reverse[0] = 250.0
+        graph, _ = setup_sp.graph_from_edge_arrays(
+            u,
+            v,
+            w,
+            w_reverse,
+            directed=True,
+        )
+        self.assertEqual(dijkstra(graph, directed=True)[1, 0], 250.0)
+
+        # the default is unchanged: undirected, cheapest cost both ways
+        graph, _ = setup_sp.graph_from_edge_arrays(u, v, w)
+        self.assertEqual(graph[0, 1], 100.0)
+        self.assertEqual(graph[1, 0], 100.0)
+
+        captured = []
+        conn = MagicMock()
+        conn.execute.side_effect = lambda stmt: captured.append(str(stmt))
+        context = MagicMock()
+        context.__enter__ = MagicMock(return_value=conn)
+        context.__exit__ = MagicMock(return_value=False)
+        engine = MagicMock()
+        engine.begin.return_value = context
+        setup_sp._run_lookup_batch(engine, [1], 500)
+        self.assertTrue(captured[-1].rstrip().endswith('500, false)'))
+        setup_sp._run_lookup_batch(engine, [1], 500, directed=True)
+        self.assertTrue(captured[-1].rstrip().endswith('500, true)'))
+        setup_sp._run_lookup_batch_no_filter(engine, [1], 500, directed=True)
+        self.assertTrue(captured[-1].rstrip().endswith('500, true)'))
+
+    def test_0_62_cycling_trip_direction(self):
+        """Directed nearest distances are for the leg of the trip asked for.
+
+        Origin at node 1, shop at node 2, joined by a 100 m one-way street 1 -> 2;
+        the way home is 2 -> 3 -> 1 (150 m each, two-way).  Outbound is 100 m and
+        the return 300 m.  The in-memory engine searches outward from the
+        destination, so it must be handed the costs swapped to give the outbound
+        leg; ``search_costs`` does that, and leaves them as they are for pgRouting,
+        which searches outward from the origin.
+        """
+        import re
+        import types
+
+        import numpy as np
+        import pandas as pd
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _accessibility_spec as spec
+        import _cycling_accessibility as ca
+
+        edges = pd.DataFrame(
+            {
+                'u': [1, 2, 3],
+                'v': [2, 3, 1],
+                'cost_dist_ft': [100.0, 150.0, 150.0],
+                'cost_dist_tf': [-1.0, 150.0, 150.0],
+            },
+        )
+        dest = pd.DataFrame(
+            {'spec': ['shop'], 'dest_node': [2], 'offset_m': [0.0]},
+        )
+
+        def get_df(sql):
+            if 'FROM edges' in sql:
+                cost = re.search(r'(\w+)::float AS cost', sql).group(1)
+                reverse = re.search(r'(\w+)::float AS reverse_cost', sql)
+                out = edges[['u', 'v']].copy()
+                out['cost'] = edges[cost]
+                if reverse:
+                    out['reverse_cost'] = edges[reverse.group(1)]
+                return out
+            if f'FROM {spec._DEST_TABLE}' in sql:
+                return dest.copy()
+            raise AssertionError(f'unexpected query: {sql}')
+
+        r = types.SimpleNamespace(get_df=get_df)
+        node_index = pd.Index([1, 3], name='osmid')
+        measure = ca.MEASURES['low_stress']
+        self.assertEqual(
+            (measure['cost'], measure['reverse_cost']),
+            ('cost_dist_ft', 'cost_dist_tf'),
+        )
+        self.assertEqual(
+            ca.search_costs(measure, 'pgrouting', 'outbound'),
+            ('cost_dist_ft', 'cost_dist_tf'),
+        )
+        self.assertEqual(
+            ca.search_costs(measure, 'pgrouting', 'return'),
+            ('cost_dist_tf', 'cost_dist_ft'),
+        )
+
+        def leg(name):
+            cost, reverse_cost = ca.search_costs(measure, 'inmemory', name)
+            return spec._nearest_distances_inmemory(
+                r,
+                [{'name': 'shop'}],
+                5000,
+                node_index,
+                cost,
+                reverse_cost,
+                '',
+                'd_',
+                directed=True,
+            )
+
+        outbound, back = leg('outbound'), leg('return')
+        # node 1 rides the one-way to the shop; node 3 reaches it by way of 1 or 2
+        self.assertEqual(outbound['d_shop'].tolist(), [100.0, 150.0])
+        self.assertEqual(back['d_shop'].tolist(), [300.0, 150.0])
+        both = ca.combine_trip_legs([outbound, back])
+        self.assertEqual(both['d_shop'].tolist(), [300.0, 150.0])
+        self.assertIs(ca.combine_trip_legs([outbound]), outbound)
+
+        # no way home at all: reachable outbound, but not there and back
+        edges.loc[[1, 2], ['cost_dist_ft', 'cost_dist_tf']] = -1.0
+        self.assertEqual(leg('outbound')['d_shop'].tolist()[0], 100.0)
+        self.assertTrue(np.isnan(leg('return')['d_shop'].tolist()[0]))
+        both = ca.combine_trip_legs([leg('outbound'), leg('return')])
+        self.assertTrue(np.isnan(both['d_shop'].tolist()[0]))
+
+        self.assertEqual(ca.resolve_trip_direction({}), 'outbound')
+        self.assertEqual(
+            ca.resolve_trip_direction({'trip_direction': 'Both'}),
+            'both',
+        )
+        with self.assertRaises(SystemExit):
+            ca.resolve_trip_direction({'trip_direction': 'sideways'})
+
+    def test_0_63_cycling_directed_costs(self):
+        """Only riding a one-way street against the flow is charged differently.
+
+        Five 100 m links: two-way; one-way with the flow "from" -> "to"; one-way
+        with the flow "to" -> "from"; a one-way footway that is walked anyway; and a
+        one-way street where contraflow cycling is permitted.  With the flow, and
+        on every other link, each mode gives the undirected cost (the lesser of the
+        two stress penalty costs); against it the bike is walked ('dismount'), there
+        is no arc ('prohibit'), or nothing changes ('permit').
+        """
+        import numpy as np
+        import pandas as pd
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _cycling_lts_network as lts
+
+        def frame():
+            return pd.DataFrame(
+                {
+                    'length': [100.0] * 5,
+                    'cost_dist': [100.0, 100.0, 100.0, 300.0, 100.0],
+                    'cost_lts': [130.0, 130.0, 130.0, 300.0, 130.0],
+                    'cost_lts_reverse': [125.0, 140.0, 125.0, 305.0, 125.0],
+                    'walk_penalty': [4.0] * 5,
+                    'bike_permitted': [True, True, True, False, True],
+                    'foot_dismount': [False, False, False, True, False],
+                    'bike_oneway': [False, True, True, True, False],
+                    'bike_fwd_from_to': [True, True, False, True, True],
+                },
+            )
+
+        permit = lts.add_directed_costs(frame(), 'permit')
+        for direction in ('ft', 'tf'):
+            self.assertEqual(
+                permit[f'cost_dist_{direction}'].tolist(),
+                permit['cost_dist'].tolist(),
+            )
+            self.assertEqual(
+                permit[f'cost_ride_{direction}'].tolist(),
+                permit['cost_dist'].tolist(),
+            )
+            self.assertEqual(
+                permit[f'cost_lts_{direction}'].tolist(),
+                [125.0, 130.0, 125.0, 300.0, 125.0],
+            )
+
+        dismount = lts.add_directed_costs(frame(), 'dismount')
+        # link 1 is walked "to" -> "from", link 2 "from" -> "to"; x3, +4 m penalty
+        self.assertEqual(
+            dismount['cost_dist_ft'].tolist(),
+            [100.0, 100.0, 300.0, 300.0, 100.0],
+        )
+        self.assertEqual(
+            dismount['cost_dist_tf'].tolist(),
+            [100.0, 300.0, 100.0, 300.0, 100.0],
+        )
+        self.assertEqual(
+            dismount['cost_lts_ft'].tolist(),
+            [125.0, 130.0, 304.0, 300.0, 125.0],
+        )
+        self.assertEqual(
+            dismount['cost_lts_tf'].tolist(),
+            [125.0, 304.0, 125.0, 300.0, 125.0],
+        )
+        # the ridden-throughout cost has no arc against the flow
+        self.assertEqual(
+            dismount['cost_ride_ft'].tolist(),
+            [100.0, 100.0, -1.0, 300.0, 100.0],
+        )
+        self.assertEqual(
+            dismount['cost_ride_tf'].tolist(),
+            [100.0, -1.0, 100.0, 300.0, 100.0],
+        )
+        self.assertEqual(
+            lts.add_directed_costs(frame(), 'dismount', dismount_weight=2.0)[
+                'cost_dist_tf'
+            ].tolist(),
+            [100.0, 200.0, 100.0, 300.0, 100.0],
+        )
+
+        prohibit = lts.add_directed_costs(frame(), 'prohibit')
+        for column in ('cost_dist', 'cost_lts', 'cost_ride'):
+            self.assertEqual(prohibit[f'{column}_ft'].tolist()[2], -1.0)
+            self.assertEqual(prohibit[f'{column}_tf'].tolist()[1], -1.0)
+        self.assertEqual(
+            prohibit['cost_dist_ft'].tolist(),
+            [100.0, 100.0, -1.0, 300.0, 100.0],
+        )
+
+        # the modes are ordered: prohibit (no arc) >= dismount >= permit
+        for column in lts.DIRECTED_COST_COLUMNS:
+            strict = prohibit[column].replace(-1.0, np.inf)
+            walked = dismount[column].replace(-1.0, np.inf)
+            self.assertTrue((strict >= walked).all())
+            self.assertTrue((walked >= permit[column]).all())
+
+        with self.assertRaises(SystemExit):
+            lts.add_directed_costs(frame(), 'sometimes')
+
+    def test_0_64_cycling_contraflow_permissions(self):
+        """Contraflow cycling is read from the tags that record it, per whole edge."""
+        import pandas as pd
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _cycling_lts_network as lts
+
+        self.assertEqual(
+            lts.edge_is_oneway(
+                pd.Series([True, False, 'yes', '-1', '[False, True]', None]),
+            ).tolist(),
+            [True, False, True, True, False, False],
+        )
+
+        ways = pd.DataFrame(
+            {
+                'oneway_bicycle': ['no', 'yes', None, None, None, None, None],
+                'cycleway': [None, None, 'opposite_lane', 'lane', None, None, None],
+                'cycleway_left': [None, None, None, None, 'lane', 'lane', None],
+                'cycleway_left_oneway': [None, None, None, None, '-1', None, None],
+                'bicycle_backward': [None, None, None, None, None, None, 'yes'],
+            },
+        )
+        self.assertEqual(
+            lts.way_contraflow_cycling(ways).tolist(),
+            # explicit no; explicit yes; opposite lane; a with-flow lane is not an
+            # exemption; contraflow lane; with-flow lane on the left; bicycle:backward
+            [True, False, True, False, True, False, True],
+        )
+        # columns that were never tagged anywhere are simply absent
+        self.assertEqual(
+            lts.way_contraflow_cycling(
+                pd.DataFrame({'oneway_bicycle': ['no', None]}),
+            ).tolist(),
+            [True, False],
+        )
+
+        way_exempt = {1: True, 2: False, 3: True}
+        self.assertEqual(
+            lts.edge_contraflow_cycling(
+                pd.Series(['1', '2', '[1, 3]', '[1, 2]', '[1, 9]', '9', None]),
+                way_exempt,
+            ).tolist(),
+            # a merged edge is exempt only if every way is found and exempt
+            [True, False, True, False, False, False, False],
+        )
+
+        with_tags = lts._oneway_direction_sql('osm_x_line', True)
+        self.assertIn('e.oneway_from::bigint', with_tags)
+        self.assertIn('FROM osm_x_line', with_tags)
+        without = lts._oneway_direction_sql(None, False)
+        self.assertNotIn('osm_x_line', without)
+        self.assertIn('NULL::bigint AS oneway_from', without)
+
     def test_0_40_wampi_reproduces_published(self):
         """The weighted Adjusted MPI reproduces Mazziotta & Pareto (2022).
 
@@ -6455,6 +6774,461 @@ series:
             )
         finally:
             os.unlink(tmp_path)
+
+    def test_0_65_network_from_pbf_filter(self):
+        """Overpass way filters are evaluated as Overpass does for from_pbf networks."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import inspect
+
+        import _03_create_network_resources as nr
+
+        tests = nr.parse_overpass_way_filter(
+            '["highway"]\n\n["area"!~"yes"]\n'
+            '["highway"!~"motorway|proposed"]\n'
+            '["access"!~"no|private"]\n',
+        )
+
+        def keep(tags):
+            return all(test(tags) for test in tests)
+
+        self.assertTrue(keep({'highway': 'residential'}))
+        # regular expressions match anywhere in the value, as in Overpass
+        self.assertFalse(keep({'highway': 'motorway_link'}))
+        self.assertFalse(keep({'highway': 'path', 'access': 'private'}))
+        # negated tests are met where the key is absent
+        self.assertTrue(keep({'highway': 'path', 'access': 'permissive'}))
+        self.assertFalse(keep({'highway': 'path', 'area': 'yes'}))
+        self.assertFalse(keep({'name': 'no highway tag'}))
+        exact = nr.parse_overpass_way_filter(
+            '["highway"="footway"]["foot"!="no"][!"motor_vehicle"]',
+        )
+        self.assertTrue(all(t({'highway': 'footway'}) for t in exact))
+        self.assertFalse(
+            all(t({'highway': 'footway', 'foot': 'no'}) for t in exact),
+        )
+        self.assertFalse(
+            all(
+                t({'highway': 'footway', 'motor_vehicle': 'no'}) for t in exact
+            ),
+        )
+        # anything not certain to be evaluated as Overpass would is refused
+        for unsupported in (
+            '[highway]',
+            '["name"~"^A.*"]',
+            '["name"~"a.b"]',
+            '["name"~"a||b"]',
+            '["name"~"(a+)+b"]',
+            '["highway"](if:t["lanes"]>1)',
+            '["highway"~"road",i]',
+            '["highway"',
+            '["highway"~"road"',
+            '[!"highway"="road"]',
+            '[""]',
+            '',
+        ):
+            with self.assertRaises(RuntimeError):
+                nr.parse_overpass_way_filter(unsupported)
+
+        # white space is allowed within and between clauses
+        spaced = nr.parse_overpass_way_filter(
+            ' [ "highway" ~ "path|track" ]  [ ! "area" ] ',
+        )
+        self.assertTrue(all(t({'highway': 'cycle_track'}) for t in spaced))
+        self.assertFalse(
+            all(t({'highway': 'track', 'area': 'yes'}) for t in spaced),
+        )
+
+        # patterns are matched as the regular expression would be, without one:
+        # '^' anchors the first alternative only, '$' the last only
+        import re
+
+        values = ['', 'a', 'ab', 'ba', 'b', 'xay', 'bc', 'cb', 'a b', 'abc']
+        for pattern in (
+            'a',
+            'a|b',
+            '^a',
+            'a$',
+            '^a$',
+            '^a|b',
+            'a|b$',
+            '^a|b$',
+        ):
+            matches = nr.literal_alternatives_matcher(pattern)
+            for value in values:
+                self.assertEqual(
+                    matches(value),
+                    re.search(pattern, value) is not None,
+                    (pattern, value),
+                )
+
+        # no regular expression is compiled from the query: a filter of a
+        # length that would stall a backtracking parser is read at once
+        with self.assertRaises(RuntimeError):
+            nr.parse_overpass_way_filter('[' + ' ' * 200000)
+        source = inspect.getsource(nr.parse_overpass_way_filter)
+        source += inspect.getsource(nr._overpass_filter_clauses)
+        source += inspect.getsource(nr.literal_alternatives_matcher)
+        self.assertNotIn('re.', source)
+
+    def test_0_66_network_from_pbf_response(self):
+        """Overpass network queries are answered from an extract as Overpass would."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _03_create_network_resources as nr
+
+        coordinates = {
+            1: (0.0, 0.0),  # inside
+            2: (0.5, 0.5),  # inside, tagged
+            3: (3.0, 0.0),  # outside
+            4: (-2.0, 0.2),  # outside, west
+            5: (2.0, 0.2),  # outside, east
+            6: (5.0, 5.0),  # outside
+            7: (6.0, 6.0),  # outside
+            8: (0.2, 0.2),  # inside, on a filtered-out way
+        }
+        elements = [
+            {'type': 'node', 'id': i, 'lat': lat, 'lon': lon, 'tags': {}}
+            for i, (lat, lon) in coordinates.items()
+        ]
+        elements[1]['tags'] = {'highway': 'crossing'}
+        elements += [
+            {
+                'type': 'way',
+                'id': 14,
+                'nodes': [2, 3],
+                'tags': {'highway': 'path'},
+            },
+            {
+                'type': 'way',
+                'id': 10,
+                'nodes': [1, 2],
+                'tags': {'highway': 'residential'},
+            },
+            {
+                'type': 'way',
+                'id': 12,
+                'nodes': [4, 5],
+                'tags': {'highway': 'primary'},
+            },
+            {
+                'type': 'way',
+                'id': 13,
+                'nodes': [6, 7],
+                'tags': {'highway': 'primary'},
+            },
+            {
+                'type': 'way',
+                'id': 11,
+                'nodes': [1, 8],
+                'tags': {'highway': 'motorway'},
+            },
+        ]
+        extract = nr.extract_from_elements(
+            elements,
+            'test.osm.pbf',
+            '2016-01-01T00:00:00Z',
+        )
+        square = '-1.000000 -1.000000 -1.000000 1.000000 1.000000 1.000000 1.000000 -1.000000 -1.000000 -1.000000'
+        query = (
+            '[out:json][timeout:180][date:"2016-01-01T00:00:00Z"];'
+            f"(way[\"highway\"][\"highway\"!~\"motorway\"](poly:'{square}');>;);out;"
+        )
+        response = nr.overpass_response_from_extract(extract, query)
+        order = [(e['type'], e['id']) for e in response['elements']]
+        # ways with a node inside (10, and 14 with its outside node), or a
+        # segment crossing the polygon (12); not 11 (filter) or 13 (outside);
+        # nodes then ways, each sorted by ID
+        self.assertEqual(
+            order,
+            [('node', i) for i in (1, 2, 3, 4, 5)]
+            + [('way', i) for i in (10, 12, 14)],
+        )
+        nodes = {
+            e['id']: e for e in response['elements'] if e['type'] == 'node'
+        }
+        self.assertEqual(nodes[2]['tags'], {'highway': 'crossing'})
+        self.assertNotIn('tags', nodes[1])
+        self.assertEqual((nodes[3]['lat'], nodes[3]['lon']), (3.0, 0.0))
+        ways = {e['id']: e for e in response['elements'] if e['type'] == 'way'}
+        self.assertEqual(ways[14]['nodes'], [2, 3])
+        # incomplete ways are refused
+        with self.assertRaises(RuntimeError):
+            nr.extract_from_elements(
+                elements[:2] + [elements[-1]],
+                'test.osm.pbf',
+                '2016-01-01T00:00:00Z',
+            )
+
+    def test_0_67_network_from_pbf_local_endpoint(self):
+        """A network is built by OSMnx from a local endpoint, using public settings only.
+
+        from_pbf points OSMnx's 'overpass_url' at an Overpass endpoint served from
+        this process, and uses nothing private to OSMnx.  This builds a graph with
+        OSMnx's own graph_from_polygon, unmodified and with no network access,
+        from a small synthetic extract: a street within the polygon, one a
+        kilometre outside it, and a way the filter excludes.  It fails if an OSMnx
+        upgrade changes how it sends or reads an Overpass network query.
+        """
+        import inspect
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _03_create_network_resources as nr
+        import osmnx as ox
+        from shapely.geometry import box
+
+        source = inspect.getsource(nr)
+        for private in ('osmnx._', 'mock.patch', 'from osmnx import _'):
+            self.assertNotIn(private, source)
+        self.assertNotRegex(source, '[^a-z]ox[.]_[a-z]')
+
+        def node(i, lon, lat):
+            return {'type': 'node', 'id': i, 'lon': lon, 'lat': lat}
+
+        elements = [
+            node(1, 0.001, 0.001),
+            node(2, 0.002, 0.001),
+            node(3, 0.003, 0.001),
+            node(4, 0.002, 0.002),
+            node(5, 0.020, 0.001),
+            node(6, 0.021, 0.001),
+            node(7, 0.001, 0.003),
+            node(8, 0.003, 0.003),
+            {
+                'type': 'way',
+                'id': 10,
+                'nodes': [1, 2, 3],
+                'tags': {'highway': 'residential', 'name': 'Calle Mayor'},
+            },
+            {
+                'type': 'way',
+                'id': 11,
+                'nodes': [2, 4],
+                'tags': {'highway': 'footway'},
+            },
+            {
+                'type': 'way',
+                'id': 12,
+                'nodes': [5, 6],
+                'tags': {'highway': 'residential'},
+            },
+            {
+                'type': 'way',
+                'id': 13,
+                'nodes': [7, 8],
+                'tags': {'highway': 'motorway'},
+            },
+        ]
+        extract = nr.extract_from_elements(
+            elements,
+            'x.pbf',
+            '2026-01-01T00:00:00Z',
+        )
+        before = {
+            name: getattr(ox.settings, name)
+            for name in ('overpass_url', 'overpass_rate_limit', 'use_cache')
+        }
+        with nr.local_overpass_endpoint(extract):
+            self.assertIn('127.0.0.1', ox.settings.overpass_url)
+            G = ox.graph_from_polygon(
+                box(0, 0, 0.004, 0.004),
+                custom_filter='["highway"]["highway"!~"motorway"]',
+                retain_all=True,
+                simplify=False,
+            )
+        # settings are restored, and the request was answered here
+        for name, value in before.items():
+            self.assertEqual(getattr(ox.settings, name), value)
+        self.assertEqual(len(extract['responses']), 1)
+        self.assertEqual(extract['responses'][0]['ways'], 2)
+        # the street and footway within the polygon; not the distant street
+        # (beyond OSMnx's buffer) nor the motorway (excluded by the filter)
+        self.assertEqual(set(G.nodes), {1, 2, 3, 4})
+        self.assertEqual(G.edges[1, 2, 0]['osmid'], 10)
+        self.assertEqual(G.edges[1, 2, 0]['name'], 'Calle Mayor')
+        self.assertEqual(G.edges[2, 4, 0]['highway'], 'footway')
+
+        # a query the endpoint cannot answer is refused, with the reason raised
+        with self.assertRaises(RuntimeError):
+            with nr.local_overpass_endpoint(extract):
+                ox.graph_from_polygon(
+                    box(0, 0, 0.004, 0.004),
+                    custom_filter='["highway"~"^(resid|foot).*"]',
+                )
+
+        # the OSM XML reader yields the same element form
+        import io
+        import xml.sax
+
+        handler = nr._OSMElements()
+        xml.sax.parse(
+            io.BytesIO(
+                b'<osm><node id="1" lat="0.5" lon="1.5"><tag k="a" v="b"/></node>'
+                b'<node id="2" lat="0" lon="0"/><way id="9"><nd ref="1"/>'
+                b'<nd ref="2"/><tag k="highway" v="path"/></way></osm>',
+            ),
+            handler,
+        )
+        self.assertEqual(
+            handler.elements,
+            [
+                {
+                    'type': 'node',
+                    'id': 1,
+                    'lat': 0.5,
+                    'lon': 1.5,
+                    'tags': {'a': 'b'},
+                },
+                {'type': 'node', 'id': 2, 'lat': 0.0, 'lon': 0.0},
+                {
+                    'type': 'way',
+                    'id': 9,
+                    'nodes': [1, 2],
+                    'tags': {'highway': 'path'},
+                },
+            ],
+        )
+
+    def test_0_68_network_from_pbf_clipped_excerpt(self):
+        """Ways cut off by a clipped excerpt are used as far as the data hold them.
+
+        OpenStreetMap data that are themselves a clipped excerpt (as supplied for
+        the example region) hold ways that reference nodes beyond their edge.
+        The analysis does not fail on these.  A way incomplete only outside the
+        area the network is built from is used less its missing nodes, as OSMnx
+        discards everything out there anyway.  A way cut off within the area is
+        used as far as it goes, any further part of it is dropped, and it is
+        reported for the user to inspect.
+        """
+        import os
+        import tempfile
+        import types
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _03_create_network_resources as nr
+        import geopandas as gpd
+        from shapely.geometry import box
+
+        def elements(*ways):
+            nodes = [
+                {'type': 'node', 'id': i, 'lon': lon, 'lat': 0.0}
+                for i, lon in [
+                    (1, 0.0),
+                    (2, 0.1),
+                    (3, 0.2),
+                    (4, 0.3),
+                    (5, 5.0),
+                    (6, 5.1),
+                    (7, 5.2),
+                ]
+            ]
+            return nodes + [
+                {
+                    'type': 'way',
+                    'id': 10 + i,
+                    'nodes': way,
+                    'tags': {'highway': 'residential', 'name': f'way {i}'},
+                }
+                for i, way in enumerate(ways)
+            ]
+
+        area = box(
+            -1,
+            -1,
+            1,
+            1,
+        )  # holds nodes 1 to 4; nodes 5 to 7 are far away
+
+        # without an area, incomplete ways are refused (so that a larger outer
+        # bounding box can be tried first)
+        with self.assertRaises(nr.IncompleteWaysError) as refused:
+            nr.extract_from_elements(elements([1, 2, 99]), 'x.pbf', 't')
+        self.assertEqual(refused.exception.missing, 1)
+
+        extract = nr.extract_from_elements(
+            elements(
+                [1, 2],  # complete
+                [
+                    2,
+                    5,
+                    99,
+                    6,
+                    98,
+                ],  # incomplete only outside the area: kept whole
+                [
+                    1,
+                    2,
+                    99,
+                    3,
+                    4,
+                    97,
+                    5,
+                    6,
+                ],  # cut within the area, between 2 and 3
+                [4, 96],  # cut within the area, leaving no usable part
+                [7, 95],  # incomplete outside the area, with no usable part
+            ),
+            'x.pbf',
+            't',
+            area=area,
+        )
+        self.assertEqual(extract['incomplete_refs'], 6)
+        self.assertEqual(extract['incomplete_ways'], 4)
+        self.assertEqual(extract['way_ids'].tolist(), [10, 11, 12])
+        self.assertEqual(
+            extract['way_nodes'],
+            # way 12 keeps the first of its two parts within the area; it is
+            # also broken at the missing node beside node 4, so [5, 6] goes
+            [[1, 2], [2, 5, 6], [1, 2]],
+        )
+        self.assertEqual(
+            extract['node_ids'][extract['flat_index']].tolist(),
+            [1, 2, 2, 5, 6, 1, 2],
+        )
+        cut = {way['id']: way for way in extract['cut_ways']}
+        self.assertEqual(set(cut), {12, 13})
+        self.assertEqual(cut[12]['retained'], [[1, 2]])
+        self.assertEqual(cut[12]['dropped'], [[3, 4]])
+        self.assertEqual(cut[12]['missing_nodes'], 2)
+        self.assertEqual(cut[13]['retained'], [])
+
+        # complete data are unaffected by being given an area
+        complete = nr.extract_from_elements(
+            elements([1, 2], [2, 3, 4]),
+            'x.pbf',
+            't',
+            area=area,
+        )
+        self.assertEqual(complete['incomplete_refs'], 0)
+        self.assertEqual(complete['cut_ways'], [])
+        self.assertEqual(complete['way_nodes'], [[1, 2], [2, 3, 4]])
+
+        # the cut ways are written to a dated GeoPackage; the analysis goes on
+        with tempfile.TemporaryDirectory() as folder:
+            r = types.SimpleNamespace(
+                config={'region_dir': folder},
+                codename='Test',
+            )
+            nr.report_incomplete_ways(r, extract)
+            written = extract['incomplete_ways_file']
+            self.assertRegex(
+                written,
+                r'^Test_network_incomplete_ways_\d{4}-\d{2}-\d{2}\.gpkg$',
+            )
+            layer = gpd.read_file(os.path.join(folder, written))
+            self.assertEqual(
+                sorted(zip(layer['osm_way_id'], layer['status'])),
+                [(12, 'dropped'), (12, 'retained'), (13, 'dropped')],
+            )
+            self.assertEqual(layer.crs.to_epsg(), 4326)
+            kept = layer[layer['status'] == 'retained'].iloc[0]
+            self.assertEqual(kept['name'], 'way 2')
+            self.assertEqual(
+                [round(x, 1) for x, y in kept.geometry.coords],
+                [0.0, 0.1],
+            )
+            # nothing is written where no way is cut off within the area
+            nr.report_incomplete_ways(r, complete)
+            self.assertIsNone(complete['incomplete_ways_file'])
+            self.assertEqual(len(os.listdir(folder)), 1)
 
     def test_9_custom_open_space_supplement_and_replace(self):
         """Custom areas_of_interest public_open_space supplements or replaces OSM.

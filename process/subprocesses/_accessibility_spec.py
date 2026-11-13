@@ -962,8 +962,14 @@ def _banded_distances(
     where,
     col_prefix,
     n_workers,
+    directed=False,
 ):
     """Origin-seeded banded nearest-distance to each spec (one routing pass).
+
+    With ``directed=True`` the search runs outward from each origin over a directed
+    graph, so the distance is that of travel *from* the origin *to* the destination
+    under ``cost`` ("from" -> "to") and ``reverse_cost``; swap the two to measure the
+    return trip.
 
     For each ascending band, routes only the origins that have not yet reached every spec,
     records each spec's exact first-found distance, and carries covered origins forward.
@@ -1000,6 +1006,7 @@ def _banded_distances(
             reverse_cost=reverse_cost,
             where=where,
             n_workers=n_workers,
+            directed=directed,
         )
         with r.engine.begin() as conn:
             conn.execute(
@@ -1272,8 +1279,17 @@ def _nearest_distances_inmemory(
     where,
     col_prefix,
     collect=None,
+    directed=False,
 ):
     """Exact per-origin nearest distance to each spec via in-memory Dijkstra (one pass).
+
+    With ``directed=True`` the graph is directed (``setup_sp.load_network_graph``).
+    Note which way this search runs: it starts at the *destinations* and works
+    outward, so the value at a node is the cost of travelling from the nearest
+    destination to it under ``cost`` ("from" -> "to") and ``reverse_cost``.  For the
+    cost of travelling from the node *to* the destination -- the outbound trip, and
+    what the banded pgRouting search measures -- pass the two costs swapped, which
+    reverses every arc.  On an undirected graph the two are the same thing.
 
     Equivalent by construction to the banded pgRouting path (same graph, same edge
     costs, exact shortest paths): for each spec, a virtual super-source is connected
@@ -1300,6 +1316,7 @@ def _nearest_distances_inmemory(
         cost=cost,
         reverse_cost=reverse_cost,
         where=where,
+        directed=directed,
     )
     n = graph.shape[0]
     dest = r.get_df(

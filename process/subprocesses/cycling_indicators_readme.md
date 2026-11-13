@@ -44,9 +44,36 @@ geometric distance — not by routing the whole network and then testing whether
 path happened to be low-stress (the R approach). There is no cap on how far a dismount
 excursion may extend; the `dismount_weight` multiplier is the only brake.
 
-Routing is **undirected**, consistent with the GHSCI accessibility engine. Origins and
-destinations are evaluated from the two terminal nodes of their associated edge with
-along-edge offsets (the GHSCI "full distance" paradigm), not a single nearest-node snap.
+Routing is **directed**: a one-way street is ridden only with the flow. Each street
+still has a single row in `edges`; `_cycling_lts_network.py` gives it a cost for each
+direction of travel (`cost_dist_ft`/`_tf`, `cost_lts_ft`/`_tf`, `cost_ride_ft`/`_tf`, for
+`"from"`→`"to"` and `"to"`→`"from"`), which both routing engines read as
+cost / reverse cost. Against the flow of a one-way street, `contraflow` decides:
+
+| `contraflow` | Against the flow | Use |
+|---|---|---|
+| `dismount` (default) | The bike is walked: `length × dismount_weight`, as on a footway. Not usable under `low_stress_ride`, which must be ridden throughout. | Headline results |
+| `prohibit` | Not usable under any measure. | Strict sensitivity bound |
+| `permit` | As with the flow: one-way restrictions are ignored. | Reproduces results from before one-way streets were accounted for, exactly |
+
+A street is one-way for cycling where OpenStreetMap tags it `oneway` (roundabouts
+included) and does not record contraflow cycling: `oneway:bicycle=no`, the
+`cycleway=opposite*` family, a `cycleway:<side>:oneway` of `no` or `-1`, or
+`bicycle:backward=yes`. These are read per way from the osm2pgsql import, and an edge
+merged from several ways is exempt only if every one of them is. A link that is walked
+anyway (`foot_dismount`) is never direction-restricted. With the flow, and on every
+two-way link, costs are exactly the earlier undirected ones, so the treatment of one-way
+streets is the only thing that changed.
+
+Because one-way streets make there and back differ, `trip_direction` states which leg a
+distance describes: `outbound` (default: from the sample point to the destination),
+`return`, or `both` (the longer of the two, so a destination is within a threshold only
+if it can be reached *and* returned from within it; this doubles the routing).
+
+Origins and destinations are evaluated from the two terminal nodes of their associated
+edge with along-edge offsets (the GHSCI "full distance" paradigm), not a single
+nearest-node snap. Those offsets are charged in plain metres to either end, so the first
+or last stretch along a one-way edge is not yet direction-aware (see §6).
 
 Where a destination sits on the **same edge** as the sample point, the distance is the
 direct stretch of edge between them whenever that is shorter than a route by way of a
@@ -615,12 +642,34 @@ Writing the Markdown report needs `tabulate` (pandas `to_markdown`); the metrics
 
 ## 6. Notes and current limitations
 
-- **Routing is undirected.** The R one-way edge expansion and its ADT halving are both
-  omitted; because the halving cancelled against the LTS thresholds, LTS results are
-  unchanged. Accessibility is evaluated from origins to nearest destinations rather than as
-  directed trips, and stress classification is not direction-specific, so a directed
-  representation is not required. The manuscript is being updated to match (it previously
-  described a one-way representation, per `cyclingIndicators/KNOWN_ISSUES.md` #3).
+- **Routing is directed, but each street is still one row.** The R one-way edge
+  expansion and its ADT halving are both omitted; because the halving cancelled against
+  the LTS thresholds, LTS results are unchanged, and stress classification is not
+  direction-specific. Route *legality* is, so one-way streets carry directed costs (see
+  "The edge costs"). Until November 2026 routing was undirected and routes could ride
+  against one-way streets, which Round 2 validators in València reported for 14 of their
+  20 sample points. **Results from before that change overstate access, most in cities
+  with many one-way streets, and must not be tabulated alongside later ones.**
+  `contraflow: permit` reproduces them for comparison.
+- **What directed routing does not yet cover.**
+  - *The first and last stretch.* A sample point or destination partway along a one-way
+    edge can reach either end of it at plain cost, so a route may begin or end with a
+    short stretch against the flow.
+  - *Under-recorded permissions.* Where cycling against a one-way street is legal but
+    not tagged (`oneway:bicycle=no`), access is understated; tagging completeness
+    varies between countries.
+  - *Direction for older networks.* The direction of a one-way street is recorded when
+    the network is built (`oneway_from`, from `_03_create_network_resources`). For a
+    network built before that, it is recovered from the edge geometry or, for
+    single-segment edges whose stored geometry has no reliable orientation, from the
+    node order of the OpenStreetMap way; `_cycling_lts_network` reports how many edges
+    each source resolved.
+  - *Opposing one-way pairs.* Two one-way streets joining the same pair of nodes in
+    opposite directions (a short divided road) can be reduced to one when the network
+    is made undirected, leaving the other direction to be walked.
+  - *The direction of the stress penalty.* The intersection term of the stress penalty
+    depends on the node entered, but the lesser of the two directions' costs is still
+    charged both ways, as it always has been.
 - **Only the `danger_weighted` measure uses a weighted distance.** Its `cost_lts` inflates
   LTS 3–4 links by `danger_weight` and adds the LTS impedance, so a route using high-stress
   links spends more of its budget on them, and the distance thresholds apply to that

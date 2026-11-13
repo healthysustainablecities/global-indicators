@@ -21,6 +21,12 @@ Each route is disaggregated into ridden and dismounted (walk-the-bike) segments,
 with both the geometric distance and the penalised routing cost, so the distance
 budget a validator sees matches the one the indicator spent.
 
+Routing is directed: a one-way street is ridden only with the flow.  Segments are
+exported in the order and direction they are travelled, and one travelled against
+the flow of a one-way street is flagged (``cf``); it is also a walked segment
+(``d``) unless the region is configured ``contraflow: permit``, in which case it
+was ridden against the flow -- the behaviour the directed routing replaced.
+
 The two *connection* legs are exported as geometry too, not just as numbers folded
 into the total: sample points and destinations sit partway along an edge, and the
 offsets the indicator charges are measured along that edge, so each leg is exported
@@ -67,9 +73,14 @@ from _cycling_accessibility import (  # noqa: E402
     _build_dest_table,
     _ensure_node_associations,
     resolve_measures,
+    resolve_trip_direction,
+    search_costs,
     usable_destination_specs,
 )
-from _cycling_lts_network import cycling_config  # noqa: E402
+from _cycling_lts_network import (  # noqa: E402
+    CONTRAFLOW_DEFAULT,
+    cycling_config,
+)
 from scipy.sparse import csr_matrix, hstack, vstack  # noqa: E402
 from scipy.sparse.csgraph import dijkstra  # noqa: E402
 from setup_sp import _same_edge_pairs, load_network_graph  # noqa: E402
@@ -358,14 +369,21 @@ def same_edge_candidates(r, spec, pts):
 
 
 # ------------------------------------------------------- route reconstruction
-def measure_graph(r, measure):
-    """Load a measure's routable subgraph once, for reuse across categories."""
+def measure_graph(r, measure, leg='outbound'):
+    """Load a measure's routable subgraph once, for reuse across categories.
+
+    Directed, and arranged for the search ``measure_tree`` runs outward from the
+    destinations (``search_costs``), so the tree it finds is the one the indicator
+    costed for that leg of the trip.
+    """
     m = MEASURES[measure]
+    cost, reverse_cost = search_costs(m, 'inmemory', leg)
     return load_network_graph(
         r,
-        cost=m['cost'],
-        reverse_cost=m['reverse_cost'],
+        cost=cost,
+        reverse_cost=reverse_cost,
         where=m['where'],
+        directed=True,
     )
 
 
@@ -466,11 +484,15 @@ def fetch_edges(r, pairs, measure):
 
     Restricted to the measure's own subgraph (``MEASURES[measure]['where']``) and,
     where a node pair carries parallel edges, resolved to the one the router would
-    have traversed — the cheapest under that measure's cost, matching
-    ``load_network_graph``'s ``fmin(cost, reverse_cost)``.  A shared lookup keyed on
+    have traversed — the cheapest under that measure's cost.  A shared lookup keyed on
     the node pair alone gets this wrong wherever a rideable and a walk-only edge
     join the same two nodes (974 such pairs in Melbourne), drawing the walked edge's
     length, stress and dismount flag onto a ridden route.
+
+    Routing is directed, so the lookup is keyed on the *ordered* pair
+    ``(travelled from, travelled to)``: an edge is entered once for each direction it
+    can be travelled under this measure, at that direction's cost, and flagged
+    ``contraflow`` where that direction runs against a one-way street.
     """
     if not pairs:
         return {}
@@ -491,10 +513,13 @@ def fetch_edges(r, pairs, measure):
     with r.engine.begin() as conn:
         conn.execute(text(f'CREATE INDEX ON {_PAIR_TABLE} (u, v)'))
     df = r.get_df(
-        f'''SELECT e."from" AS u, e."to" AS v, e.length, e.cost_dist,
-                   e.cost_lts, e.lvl_traf_stress, e.foot_dismount,
+        f'''SELECT e."from" AS u, e."to" AS v, e.length,
+                   e.lvl_traf_stress, e.foot_dismount,
                    e.highway, e.name,
-                   LEAST(e.{cost}, e.{rcost}) AS route_cost,
+                   e.{cost}::float AS cost_ft, e.{rcost}::float AS cost_tf,
+                   (COALESCE(e.bike_oneway, false)
+                    AND COALESCE(e.bike_permitted, false)) AS oneway,
+                   COALESCE(e.bike_fwd_from_to, true) AS fwd,
                    ST_AsGeoJSON(ST_Transform(e.geom, 4326), {COORD_DP}) AS gj
             FROM edges e
             JOIN {_PAIR_TABLE} p ON e."from" = p.u AND e."to" = p.v
@@ -504,20 +529,26 @@ def fetch_edges(r, pairs, measure):
         conn.execute(text(f'DROP TABLE IF EXISTS {_PAIR_TABLE}'))
     lookup = {}
     for row in df.itertuples(index=False):
-        key = (min(row.u, row.v), max(row.u, row.v))
-        prev = lookup.get(key)
-        if prev is None or (row.route_cost or 0) < (prev['route_cost'] or 0):
-            lookup[key] = {
-                'length': row.length,
-                'cost_dist': row.cost_dist,
-                'cost_lts': row.cost_lts,
-                'lts': row.lvl_traf_stress,
-                'route_cost': row.route_cost,
-                'dismount': bool(row.foot_dismount),
-                'highway': row.highway,
-                'name': row.name,
-                'gj': row.gj,
-            }
+        oneway, fwd = bool(row.oneway), bool(row.fwd)
+        for a, b, route_cost, against in (
+            (row.u, row.v, row.cost_ft, oneway and not fwd),
+            (row.v, row.u, row.cost_tf, oneway and fwd),
+        ):
+            # a negative cost is no arc in this direction (a one-way street)
+            if route_cost is None or pd.isna(route_cost) or route_cost < 0:
+                continue
+            prev = lookup.get((a, b))
+            if prev is None or route_cost < prev['route_cost']:
+                lookup[(a, b)] = {
+                    'length': row.length,
+                    'lts': row.lvl_traf_stress,
+                    'route_cost': float(route_cost),
+                    'dismount': bool(row.foot_dismount),
+                    'contraflow': against,
+                    'highway': row.highway,
+                    'name': row.name,
+                    'gj': row.gj,
+                }
     return lookup
 
 
@@ -554,16 +585,30 @@ def _clean(v):
     )
 
 
-def build_segments(seq, lookup, node_xy, cost_col):
+def build_segments(
+    seq,
+    lookup,
+    node_xy,
+    walk_contraflow=True,
+    return_leg=False,
+):
     """Turn a node sequence into drawable segments with distances and costs.
 
-    Coordinates are emitted in *travel* order, oriented against the node each edge
-    is traversed from, so the exported route is a continuous chain and its last
-    coordinate really is the end the route arrives at.
+    Coordinates are emitted from the sample point towards the destination, oriented
+    against the node each edge is left by, so the exported route is a continuous
+    chain and its last coordinate really is the destination end.  That is the order
+    of travel on the outbound leg; on the return leg (``return_leg``) the same chain
+    is travelled the other way, and each edge is looked up accordingly.
+
+    A segment travelled against a one-way street is flagged ``cf``.  It is walked
+    (``d``, and counted in the dismount distance) when ``walk_contraflow``, which is
+    the case unless the region permits contraflow riding.
+
+    Returns ``(segments, metres, cost, dismount metres, contraflow metres)``.
     """
-    segs, total, cost_total, dismount = [], 0.0, 0.0, 0.0
+    segs, total, cost_total, dismount, contraflow = [], 0.0, 0.0, 0.0, 0.0
     for a, b in zip(seq[:-1], seq[1:]):
-        e = lookup.get((min(a, b), max(a, b)))
+        e = lookup.get((b, a) if return_leg else (a, b))
         if e is None or not e['gj']:
             continue
         geom = json.loads(e['gj'])
@@ -573,28 +618,39 @@ def build_segments(seq, lookup, node_xy, cost_col):
         if a in node_xy:
             coords = _orient(coords, node_xy[a], first=True)
         length = float(e['length'] or 0)
-        cost = float(e[cost_col] or length)
+        cost = float(e['route_cost'])
+        against = bool(e['contraflow'])
+        walked = e['dismount'] or (against and walk_contraflow)
         total += length
         cost_total += cost
-        if e['dismount']:
+        if walked:
             dismount += length
+        if against:
+            contraflow += length
         lts = _clean(e['lts'])
-        segs.append(
-            {
-                'c': coords,
-                'lts': int(lts) if lts is not None else None,
-                'd': 1 if e['dismount'] else 0,
-                'm': round(length, 1),
-                'cm': round(cost, 1),
-                'hw': _clean(e['highway']),
-                'n': _clean(e['name']),
-            },
-        )
-    return segs, round(total, 1), round(cost_total, 1), round(dismount, 1)
+        seg = {
+            'c': coords,
+            'lts': int(lts) if lts is not None else None,
+            'd': 1 if walked else 0,
+            'm': round(length, 1),
+            'cm': round(cost, 1),
+            'hw': _clean(e['highway']),
+            'n': _clean(e['name']),
+        }
+        if against:
+            seg['cf'] = 1
+        segs.append(seg)
+    return (
+        segs,
+        round(total, 1),
+        round(cost_total, 1),
+        round(dismount, 1),
+        round(contraflow, 1),
+    )
 
 
 # ------------------------------------------------------------------- export
-def export(codename, n_points, seed, outdir):  # noqa: C901
+def export(codename, n_points, seed, outdir, contraflow=None):  # noqa: C901
     r = ghsci.Region(codename)
     config = cycling_config(r)
     if config is None:
@@ -639,6 +695,15 @@ def export(codename, n_points, seed, outdir):  # noqa: C901
         sys.exit('None of the target destination categories are available.')
 
     measures = [m for m in MEASURE_ORDER if m in resolve_measures(config)]
+    # the leg of the trip the indicators costed; where they cost both, the route
+    # shown is the outbound one
+    trip_direction = resolve_trip_direction(config)
+    leg = 'return' if trip_direction == 'return' else 'outbound'
+    # ``contraflow`` overrides the configured treatment for a caller that has
+    # rewritten the directed costs to compare treatments (_compare_contraflow.py)
+    contraflow_mode = str(
+        contraflow or config.get('contraflow', CONTRAFLOW_DEFAULT),
+    ).lower()
     _ensure_node_associations(
         r,
         {by_name[t['spec']]['layer'] for t in targets},
@@ -659,7 +724,7 @@ def export(codename, n_points, seed, outdir):  # noqa: C901
     )
     trees = {}
     for measure in measures:
-        graph, node_ids = measure_graph(r, measure)  # once per measure
+        graph, node_ids = measure_graph(r, measure, leg)  # once per measure
         for t in targets:
             paths, dists, _ = measure_tree(
                 r,
@@ -717,7 +782,6 @@ def export(codename, n_points, seed, outdir):  # noqa: C901
             if pd.notna(p['n2']):
                 terminals.append((int(p['n2']), d2, 2))
         for measure in measures:
-            cost_col = MEASURES[measure]['cost']
             for t in targets:
                 paths, dists = trees[(measure, t['key'])]
                 best = None
@@ -757,11 +821,12 @@ def export(codename, n_points, seed, outdir):  # noqa: C901
                     )
                     continue
                 seq = paths[best[0]]
-                segs, total, cost_total, dismount = build_segments(
+                segs, total, cost_total, dismount, against = build_segments(
                     seq,
                     lookups[measure],
                     node_xy,
-                    cost_col,
+                    walk_contraflow=contraflow_mode != 'permit',
+                    return_leg=leg == 'return',
                 )
                 wanted[t['key']].add(seq[-1])
                 routes.append(
@@ -773,6 +838,7 @@ def export(codename, n_points, seed, outdir):  # noqa: C901
                         'm': total,
                         'cm': cost_total,
                         'dm': dismount,
+                        'cfm': against,
                         'net': round(best[1], 1),
                         't': best[3],
                         'to': round(best[2], 1),
@@ -804,6 +870,12 @@ def export(codename, n_points, seed, outdir):  # noqa: C901
             'one sample point per drawn cell'
         ),
         'max_band_m': MAX_BAND,
+        # how one-way streets were treated; routes exported before this was recorded
+        # were routed undirected and may ride against the flow
+        'routing': 'directed',
+        'contraflow': contraflow_mode,
+        'trip_direction': trip_direction,
+        'leg': leg,
         'measures': [
             {
                 'key': m,
